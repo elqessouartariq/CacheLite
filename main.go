@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"html/template"
 	"net/http"
 	"os"
@@ -11,6 +12,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func main() {
@@ -31,6 +35,11 @@ func main() {
 		DB:       0,
 	})
 
+	mongoClient, err := mongo.Connect(context.TODO(), options.Client().ApplyURI("mongodb://localhost:27017"))
+	if err != nil {
+		panic(err)
+	}
+
 	corsOrigins := handlers.AllowedOrigins([]string{"*"})
 	corsMethods := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE"})
 	corsHeaders := handlers.AllowedHeaders([]string{"Content-Type"})
@@ -38,8 +47,17 @@ func main() {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/", handler)
+
 	router.HandleFunc("/users", func(w http.ResponseWriter, r *http.Request) {
 		api.GetUsers(client, w, r)
+	}).Methods("GET")
+
+	router.HandleFunc("/posts-with-cache", func(w http.ResponseWriter, r *http.Request) {
+		api.GetPostsWithCache(client, mongoClient, w, r)
+	}).Methods("GET")
+
+	router.HandleFunc("/posts-without-cache", func(w http.ResponseWriter, r *http.Request) {
+		api.GetPostsWithoutCache(mongoClient, w, r)
 	}).Methods("GET")
 
 	http.ListenAndServe(":8080", handlers.CORS(corsOrigins, corsMethods, corsHeaders)(router))
