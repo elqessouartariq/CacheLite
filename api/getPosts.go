@@ -17,7 +17,7 @@ type Post struct {
 	UserID   int       `json:"userId"`
 	Title    string    `json:"title"`
 	Body     string    `json:"body"`
-	Comments []Comment `json:"comments,omitempty"`
+	Comments []Comment `json:"comments"`
 }
 
 type Comment struct {
@@ -31,7 +31,7 @@ type Comment struct {
 var postsFetched = false
 var commentsFetched = false
 
-func GetPostsWithoutCache(mongoClient *mongo.Client, w http.ResponseWriter, r *http.Request) {
+func GetPostsWithoutCache(mongoClient *mongo.Client, w http.ResponseWriter, r *http.Request) ([]Post, error) {
 	postCollection := mongoClient.Database("proxy-db").Collection("posts")
 	commentCollection := mongoClient.Database("proxy-db").Collection("comments")
 
@@ -110,6 +110,8 @@ func GetPostsWithoutCache(mongoClient *mongo.Client, w http.ResponseWriter, r *h
 	w.WriteHeader(http.StatusOK)
 	w.Header().Add("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(posts)
+
+	return posts, nil
 }
 
 func GetPostsWithCache(client *redis.Client, mongoClient *mongo.Client, w http.ResponseWriter, r *http.Request) {
@@ -119,7 +121,18 @@ func GetPostsWithCache(client *redis.Client, mongoClient *mongo.Client, w http.R
 	if err == redis.Nil {
 		fmt.Println("Cache miss")
 
-		GetPostsWithoutCache(mongoClient, w, r)
+		posts, err = GetPostsWithoutCache(mongoClient, w, r)
+		if err != nil {
+			panic(err)
+		}
+
+		for i, post := range posts {
+			comments, err := GetCommentsForPost(mongoClient, post.ID)
+			if err != nil {
+				panic(err)
+			}
+			posts[i].Comments = comments
+		}
 
 		postsJson, err := json.Marshal(posts)
 		if err != nil {
@@ -139,9 +152,38 @@ func GetPostsWithCache(client *redis.Client, mongoClient *mongo.Client, w http.R
 		if err != nil {
 			panic(err)
 		}
-
-		w.WriteHeader(http.StatusOK)
-		w.Header().Add("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(posts)
 	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Header().Add("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(posts)
+}
+
+func GetCommentsForPost(mongoClient *mongo.Client, postID int) ([]Comment, error) {
+	var comments []Comment
+
+	collection := mongoClient.Database("proxy-db").Collection("comments")
+
+	filter := bson.M{"postid": postID}
+
+	cur, err := collection.Find(context.Background(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(context.Background())
+
+	for cur.Next(context.Background()) {
+		var comment Comment
+		err := cur.Decode(&comment)
+		if err != nil {
+			return nil, err
+		}
+		comments = append(comments, comment)
+	}
+
+	if err := cur.Err(); err != nil {
+		return nil, err
+	}
+
+	return comments, nil
 }
