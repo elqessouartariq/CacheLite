@@ -10,10 +10,24 @@
 	</head>
 	<body>
 		<h1>Hello World</h1>
-		<button onclick="fetchData()">Click here</button>
+		<button onclick="fetchData()">Get Users</button>
+		<button onclick="fetchPostsWithoutCache()">Get postsWithoutCache</button>
+		<button onclick="fetchPostsWithCache()">Get postsWithCache</button>
 		<script>
 			async function fetchData() {
 				const response = await fetch("http://localhost:8080/users");
+				const data = await response.json();
+				console.log(data);
+			}
+			async function fetchPostsWithCache() {
+				const response = await fetch("http://localhost:8080/posts-with-cache");
+				const data = await response.json();
+				console.log(data);
+			}
+			async function fetchPostsWithoutCache() {
+				const response = await fetch(
+					"http://localhost:8080/posts-without-cache",
+				);
 				const data = await response.json();
 				console.log(data);
 			}
