@@ -37,7 +37,7 @@ func GetUsers(client *redis.Client, w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		// Store the server response in the cache for 1 hour
+
 		usersJson, _ := json.Marshal(users)
 		client.Set(ctx, "users", usersJson, 20*time.Second)
 
