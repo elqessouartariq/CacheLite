@@ -1,16 +1,20 @@
 package main
 
 import (
-	"context"
-	"fmt"
+	"html/template"
+	"net/http"
 	"os"
-	"time"
 
+	"CacheLite/api"
+
+	"github.com/gorilla/handlers"
+	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
 )
 
 func main() {
+
 	err := godotenv.Load()
 
 	if err != nil {
@@ -27,16 +31,22 @@ func main() {
 		DB:       0,
 	})
 
-	ctx := context.Background()
+	corsOrigins := handlers.AllowedOrigins([]string{"*"})
+	corsMethods := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE"})
+	corsHeaders := handlers.AllowedHeaders([]string{"Content-Type"})
 
-	err = client.Set(ctx, "foo", "bar", 10*time.Second).Err()
-	if err != nil {
-		panic(err)
-	}
+	router := mux.NewRouter()
 
-	val, err := client.Get(ctx, "foo").Result()
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("foo", val)
+	router.HandleFunc("/", handler)
+	router.HandleFunc("/users", func(w http.ResponseWriter, r *http.Request) {
+		api.GetUsers(client, w, r)
+	}).Methods("GET")
+
+	http.ListenAndServe(":8080", handlers.CORS(corsOrigins, corsMethods, corsHeaders)(router))
+
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	t, _ := template.ParseFiles("web/index.html")
+	t.Execute(w, nil)
 }

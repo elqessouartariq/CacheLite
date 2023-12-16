@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, initial-scale=1.0"
+		/>
+		<title>Client</title>
+	</head>
+	<body>
+		<h1>Hello World</h1>
+		<button onclick="fetchData()">Click here</button>
+		<script>
+			async function fetchData() {
+				const response = await fetch("http://localhost:8080/users");
+				const data = await response.json();
+				console.log(data);
+			}
+		</script>
+	</body>
+</html>
