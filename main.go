@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"os"
@@ -40,6 +42,10 @@ func main() {
 		panic(err)
 	}
 
+	if mongoClient != nil {
+		fmt.Println("Connected to MongoDB!")
+	}
+
 	corsOrigins := handlers.AllowedOrigins([]string{"*"})
 	corsMethods := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE"})
 	corsHeaders := handlers.AllowedHeaders([]string{"Content-Type"})
@@ -49,15 +55,30 @@ func main() {
 	router.HandleFunc("/", handler)
 
 	router.HandleFunc("/users", func(w http.ResponseWriter, r *http.Request) {
-		api.GetUsers(client, w, r)
+		w.Header().Set("Content-Type", "application/json")
+		users := api.GetUsers(client, w, r)
+		json.NewEncoder(w).Encode(users)
 	}).Methods("GET")
 
 	router.HandleFunc("/posts-with-cache", func(w http.ResponseWriter, r *http.Request) {
-		api.GetPostsWithCache(client, mongoClient, w, r)
+		posts, err := api.GetPostsWithCache(client, mongoClient, w, r)
+
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		err = json.NewEncoder(w).Encode(posts)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}).Methods("GET")
 
 	router.HandleFunc("/posts-without-cache", func(w http.ResponseWriter, r *http.Request) {
 		api.GetPostsWithoutCache(mongoClient, w, r)
+		w.Header().Set("Content-Type", "application/json")
 	}).Methods("GET")
 
 	http.ListenAndServe(":8080", handlers.CORS(corsOrigins, corsMethods, corsHeaders)(router))
