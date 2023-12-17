@@ -29,15 +29,13 @@ type Comment struct {
 }
 
 var postsFetched = false
-var commentsFetched = false
+var posts []Post
 
 func GetPostsWithoutCache(mongoClient *mongo.Client, w http.ResponseWriter, r *http.Request) ([]Post, error) {
 	postCollection := mongoClient.Database("proxy-db").Collection("posts")
-	commentCollection := mongoClient.Database("proxy-db").Collection("comments")
+	count, _ := postCollection.CountDocuments(context.Background(), bson.M{})
 
-	var posts []Post
-
-	if !postsFetched {
+	if !postsFetched && count == 0 {
 		resp, err := http.Get("https://jsonplaceholder.typicode.com/posts")
 		if err != nil {
 			panic(err)
@@ -49,8 +47,22 @@ func GetPostsWithoutCache(mongoClient *mongo.Client, w http.ResponseWriter, r *h
 			panic(err)
 		}
 
-		for _, post := range posts {
-			_, err := postCollection.InsertOne(context.Background(), post)
+		for i, post := range posts {
+			var comments []Comment
+			resp, err := http.Get(fmt.Sprintf("https://jsonplaceholder.typicode.com/posts/%d/comments", post.ID))
+			if err != nil {
+				panic(err)
+			}
+			defer resp.Body.Close()
+
+			err = json.NewDecoder(resp.Body).Decode(&comments)
+			if err != nil {
+				panic(err)
+			}
+
+			posts[i].Comments = comments
+
+			_, err = postCollection.InsertOne(context.Background(), posts[i])
 			if err != nil {
 				panic(err)
 			}
@@ -69,69 +81,19 @@ func GetPostsWithoutCache(mongoClient *mongo.Client, w http.ResponseWriter, r *h
 		}
 	}
 
-	for i, post := range posts {
-		var comments []Comment
-
-		if !commentsFetched {
-			resp, err := http.Get(fmt.Sprintf("https://jsonplaceholder.typicode.com/posts/%d/comments", post.ID))
-			if err != nil {
-				panic(err)
-			}
-			defer resp.Body.Close()
-
-			err = json.NewDecoder(resp.Body).Decode(&comments)
-			if err != nil {
-				panic(err)
-			}
-
-			for _, comment := range comments {
-				_, err := commentCollection.InsertOne(context.Background(), comment)
-				if err != nil {
-					panic(err)
-				}
-			}
-
-			commentsFetched = true
-		} else {
-			query := bson.M{"postId": post.ID}
-			cursor, err := commentCollection.Find(context.Background(), query)
-			if err != nil {
-				panic(err)
-			}
-
-			if err = cursor.All(context.Background(), &comments); err != nil {
-				panic(err)
-			}
-		}
-
-		posts[i].Comments = comments
-	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Header().Add("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(posts)
-
 	return posts, nil
 }
 
-func GetPostsWithCache(client *redis.Client, mongoClient *mongo.Client, w http.ResponseWriter, r *http.Request) {
+func GetPostsWithCache(client *redis.Client, mongoClient *mongo.Client, w http.ResponseWriter, r *http.Request) ([]Post, error) {
 	var posts []Post
-
 	cachedPosts, err := client.Get(context.Background(), "posts").Result()
+
 	if err == redis.Nil {
 		fmt.Println("Cache miss")
-
 		posts, err = GetPostsWithoutCache(mongoClient, w, r)
+
 		if err != nil {
 			panic(err)
-		}
-
-		for i, post := range posts {
-			comments, err := GetCommentsForPost(mongoClient, post.ID)
-			if err != nil {
-				panic(err)
-			}
-			posts[i].Comments = comments
 		}
 
 		postsJson, err := json.Marshal(posts)
@@ -143,6 +105,7 @@ func GetPostsWithCache(client *redis.Client, mongoClient *mongo.Client, w http.R
 		if err != nil {
 			panic(err)
 		}
+
 	} else if err != nil {
 		panic(err)
 	} else {
@@ -152,38 +115,7 @@ func GetPostsWithCache(client *redis.Client, mongoClient *mongo.Client, w http.R
 		if err != nil {
 			panic(err)
 		}
+
 	}
-
-	w.WriteHeader(http.StatusOK)
-	w.Header().Add("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(posts)
-}
-
-func GetCommentsForPost(mongoClient *mongo.Client, postID int) ([]Comment, error) {
-	var comments []Comment
-
-	collection := mongoClient.Database("proxy-db").Collection("comments")
-
-	filter := bson.M{"postid": postID}
-
-	cur, err := collection.Find(context.Background(), filter)
-	if err != nil {
-		return nil, err
-	}
-	defer cur.Close(context.Background())
-
-	for cur.Next(context.Background()) {
-		var comment Comment
-		err := cur.Decode(&comment)
-		if err != nil {
-			return nil, err
-		}
-		comments = append(comments, comment)
-	}
-
-	if err := cur.Err(); err != nil {
-		return nil, err
-	}
-
-	return comments, nil
+	return posts, nil
 }
