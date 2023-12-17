@@ -77,8 +77,12 @@ func main() {
 	}).Methods("GET")
 
 	router.HandleFunc("/posts-without-cache", func(w http.ResponseWriter, r *http.Request) {
-		api.GetPostsWithoutCache(mongoClient, w, r)
+		posts, _ := api.GetPostsWithoutCache(mongoClient, w, r)
 		w.Header().Set("Content-Type", "application/json")
+		err = json.NewEncoder(w).Encode(posts)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 	}).Methods("GET")
 
 	http.ListenAndServe(":8080", handlers.CORS(corsOrigins, corsMethods, corsHeaders)(router))
