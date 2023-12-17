@@ -18,7 +18,8 @@ type User struct {
 
 var ctx = context.Background()
 
-func GetUsers(client *redis.Client, w http.ResponseWriter, r *http.Request) {
+func GetUsers(client *redis.Client, w http.ResponseWriter, r *http.Request) []User {
+	var users []User
 
 	val, err := client.Get(ctx, "users").Result()
 	if err == redis.Nil {
@@ -26,22 +27,19 @@ func GetUsers(client *redis.Client, w http.ResponseWriter, r *http.Request) {
 
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			return nil
 		}
 		defer resp.Body.Close()
-
-		var users []User
 
 		err = json.NewDecoder(resp.Body).Decode(&users)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			return nil
 		}
 
 		usersJson, _ := json.Marshal(users)
 		client.Set(ctx, "users", usersJson, 20*time.Second)
 
-		json.NewEncoder(w).Encode(users)
 	} else if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
@@ -49,5 +47,7 @@ func GetUsers(client *redis.Client, w http.ResponseWriter, r *http.Request) {
 		json.Unmarshal([]byte(val), &users)
 		json.NewEncoder(w).Encode(users)
 	}
+
+	return users
 
 }
