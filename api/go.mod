@@ -3,6 +3,7 @@ module CacheLite/api
 go 1.21.1
 
 require (
+	CacheLite/entities v0.0.0-00010101000000-000000000000
 	github.com/redis/go-redis/v9 v9.3.0
 	go.mongodb.org/mongo-driver v1.13.1
 )
@@ -21,3 +22,5 @@ require (
 	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
 	golang.org/x/text v0.7.0 // indirect
 )
+
+replace CacheLite/entities => ../entities

@@ -7,31 +7,17 @@ import (
 	"net/http"
 	"time"
 
+	"CacheLite/entities"
+
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-type Post struct {
-	ID       int       `json:"id"`
-	UserID   int       `json:"userId"`
-	Title    string    `json:"title"`
-	Body     string    `json:"body"`
-	Comments []Comment `json:"comments"`
-}
-
-type Comment struct {
-	ID     int    `json:"id"`
-	PostID int    `json:"postId"`
-	Name   string `json:"name"`
-	Email  string `json:"email"`
-	Body   string `json:"body"`
-}
-
 var postsFetched = false
-var posts []Post
+var posts []entities.Post
 
-func GetPostsWithoutCache(mongoClient *mongo.Client, w http.ResponseWriter, r *http.Request) ([]Post, error) {
+func GetPostsWithoutCache(mongoClient *mongo.Client, w http.ResponseWriter, r *http.Request) ([]entities.Post, error) {
 	postCollection := mongoClient.Database("proxy-db").Collection("posts")
 	count, _ := postCollection.CountDocuments(context.Background(), bson.M{})
 
@@ -48,7 +34,7 @@ func GetPostsWithoutCache(mongoClient *mongo.Client, w http.ResponseWriter, r *h
 		}
 
 		for i, post := range posts {
-			var comments []Comment
+			var comments []entities.Comment
 			resp, err := http.Get(fmt.Sprintf("https://jsonplaceholder.typicode.com/posts/%d/comments", post.ID))
 			if err != nil {
 				panic(err)
@@ -84,8 +70,8 @@ func GetPostsWithoutCache(mongoClient *mongo.Client, w http.ResponseWriter, r *h
 	return posts, nil
 }
 
-func GetPostsWithCache(client *redis.Client, mongoClient *mongo.Client, w http.ResponseWriter, r *http.Request) ([]Post, error) {
-	var posts []Post
+func GetPostsWithCache(client *redis.Client, mongoClient *mongo.Client, w http.ResponseWriter, r *http.Request) ([]entities.Post, error) {
+	var posts []entities.Post
 	cachedPosts, err := client.Get(context.Background(), "posts").Result()
 
 	if err == redis.Nil {

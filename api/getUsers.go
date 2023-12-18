@@ -6,20 +6,15 @@ import (
 	"net/http"
 	"time"
 
+	"CacheLite/entities"
+
 	"github.com/redis/go-redis/v9"
 )
 
-type User struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
-}
-
 var ctx = context.Background()
 
-func GetUsers(client *redis.Client, w http.ResponseWriter, r *http.Request) []User {
-	var users []User
+func GetUsers(client *redis.Client, w http.ResponseWriter, r *http.Request) []entities.User {
+	var users []entities.User
 
 	val, err := client.Get(ctx, "users").Result()
 	if err == redis.Nil {
@@ -43,7 +38,7 @@ func GetUsers(client *redis.Client, w http.ResponseWriter, r *http.Request) []Us
 	} else if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	} else {
-		var users []User
+		var users []entities.User
 		json.Unmarshal([]byte(val), &users)
 		json.NewEncoder(w).Encode(users)
 	}
